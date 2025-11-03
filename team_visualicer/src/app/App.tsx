@@ -1,28 +1,34 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { LoginPage } from "./components/LoginPage";
 import { DashboardLayout } from "./components/DashboardLayout";
-import { AdminDashboard } from "./components/AdminDashboard";
+import AdminDashboard from "./components/AdminDashboard";
 import { UserProfile } from "./components/UserProfile";
 import { ProgressRanking } from "./components/ProgressRanking";
-import { Achievements } from "./components/Achievements";
-import { Team } from "./components/Team";
-import { MemberOfTheMonth } from "./components/MemberOfTheMonth";
-import { Gallery } from "./components/Gallery";
+import Team from "./components/Team";
+import CalendarView from "./components/CalendarView";
+import Schedule from "./components/Schedule";
 import { Announcements } from "./components/Announcements";
-import { CalendarView } from "./components/CalendarView";
-import { Schedule } from "./components/Schedule";
-import { ForgotPassword } from "./components/ForgotPassword";
-import { VerifyCode } from "./components/VerifyCode";
-import { ChangePassword } from "./components/ChangePassword";
 
+export type MemberType =
+  | "investigador"
+  | "posgrado"
+  | "practicante"
+  | "servicio-social"
+  | null;
 
-export type MemberType = "investigador" | "posgrado" | "practicante" | "servicio-social" | null;
-type PageType = "profile" | "progress" | "team" | "calendar" | "schedule" | "member-of-month" | "gallery" | "achievements" | "announcements";
+type PageType =
+  | "profile"
+  | "progress"
+  | "team"
+  | "calendar"
+  | "schedule"
+  | "announcements";
 
 export default function App() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [memberType, setMemberType] = useState<MemberType>(null);
   const [userEmail, setUserEmail] = useState("");
+  const [userName, setUserName] = useState("");
   const [currentPage, setCurrentPage] = useState<PageType>("profile");
 
   const handleLogin = (admin: boolean, member: MemberType, email: string) => {
@@ -32,23 +38,44 @@ export default function App() {
     setCurrentPage("profile");
   };
 
+  // Al conocer el email, traemos nombre/flags reales desde la DB
+  useEffect(() => {
+    if (!userEmail) return;
+    (async () => {
+      try {
+        const res = await fetch(
+          `/api/me?email=${encodeURIComponent(userEmail)}`,
+          { cache: "no-store" }
+        );
+        const json = await res.json();
+        if (res.ok && json.ok) {
+          setUserName(json.user?.name || "");
+          setMemberType(json.user?.memberType ?? null);
+          setIsAdmin(!!json.user?.isAdmin);
+        }
+      } catch {
+        /* ignore */
+      }
+    })();
+  }, [userEmail]);
+
+  // Guard: si no es servicio social y está en "progress", lo mandamos a "profile"
+  useEffect(() => {
+    if (currentPage === "progress" && memberType !== "servicio-social") {
+      setCurrentPage("profile");
+    }
+  }, [currentPage, memberType]);
+
   const handleLogout = () => {
     setIsAdmin(false);
     setMemberType(null);
     setUserEmail("");
+    setUserName("");
     setCurrentPage("profile");
   };
 
   const handleNavigate = (page: string) => {
     setCurrentPage(page as PageType);
-  };
-
-  const getUserName = () => {
-    // Mock - en producción vendría del backend
-    if (isAdmin && memberType === "investigador") {
-      return "Dra. Sarah Johnson";
-    }
-    return "Alex Martínez";
   };
 
   const getMemberTypeLabel = () => {
@@ -69,46 +96,63 @@ export default function App() {
       default:
         label = "Miembro";
     }
-    
-    if (isAdmin) {
-      label += " (Administrador)";
-    }
-    
+    if (isAdmin) label += " (Administrador)";
     return label;
   };
 
-  // Not logged in - show login page
+  // --- Pantalla de login si no hay sesión ---
   if (!memberType) {
     return <LoginPage onLogin={handleLogin} />;
   }
 
-  // Logged in - show dashboard
+  // --- Contenido de páginas ---
   const renderPageContent = () => {
     switch (currentPage) {
       case "profile":
+        // Si es admin, su "perfil" es el dashboard de administración
         return isAdmin ? (
           <AdminDashboard />
         ) : (
-          <UserProfile isAdmin={false} memberType={memberType} />
+          <UserProfile
+            userEmail={userEmail}
+            isAdmin={isAdmin}
+            memberType={memberType}
+          />
         );
+
       case "progress":
-        return <ProgressRanking isAdmin={isAdmin} />;
-      case "achievements":
-        return <Achievements isAdmin={isAdmin} />;
+        // Esta ruta solo se alcanza si memberType === "servicio-social" (por el guard)
+        return <ProgressRanking isAdmin={false} />;
+
       case "team":
         return <Team />;
+
       case "schedule":
-        return <Schedule isAdmin={isAdmin} memberType={memberType} userEmail={userEmail} userName={getUserName()} />;
-      case "member-of-month":
-        return <MemberOfTheMonth onNavigate={handleNavigate} />;
-      case "gallery":
-        return <Gallery />;
+        return (
+          <Schedule
+            isAdmin={isAdmin}
+            memberType={memberType}
+            userEmail={userEmail}
+            userName={userName || userEmail}
+          />
+        );
+
       case "announcements":
         return <Announcements />;
+
       case "calendar":
         return <CalendarView />;
+
       default:
-        return <UserProfile isAdmin={false} memberType={memberType} />;
+        return isAdmin ? (
+          <AdminDashboard />
+        ) : (
+          <UserProfile
+            userEmail={userEmail}
+            isAdmin={isAdmin}
+            memberType={memberType}
+          />
+        );
     }
   };
 
@@ -117,7 +161,7 @@ export default function App() {
       currentPage={currentPage}
       onNavigate={handleNavigate}
       onLogout={handleLogout}
-      userName={getUserName()}
+      userName={userName || userEmail}
       userEmail={userEmail}
       isAdmin={isAdmin}
       memberType={memberType}
