@@ -1,2 +1,2 @@
 
-export { prisma, dbConnect } from "./prisma";
+export { prisma } from "./prisma";
