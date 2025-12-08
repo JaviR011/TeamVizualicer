@@ -1,36 +1,52 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+# ========== DEPENDENCIAS ==========
+node_modules/
+.pnp.*
+.pnp/
 
-# dependencies
-/node_modules
-/.pnp
-.pnp.js
+# ========== BUILD / NEXT ==========
+.next/
+.next-turbo/
+out/
+.turbo/
 
-# testing
-/coverage
-
-# next.js
-/.next/
-/out/
-
-# production
-/build
-
-# misc
-.DS_Store
-*.pem
-
-# debug
+# ========== LOGS ==========
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+pnpm-debug.log*
+*.log
 
-# local env files
-.env*.local
+# ========== ENTORNOS (.env) ==========
 .env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
 
-# vercel
-.vercel
+# (En el host como Railway definirás las variables en el panel,
+#  no se suben al repo)
 
-# typescript
-*.tsbuildinfo
-next-env.d.ts
+# ========== PRISMA / SQLITE LOCAL ==========
+/prisma/dev.db
+/prisma/dev.db-journal
+/prisma/*.db
+/prisma/*.db-journal
+
+# (NO ignores prisma/schema.prisma ni prisma/migrations/,
+#  esos sí deben ir al repo)
+
+# ========== TEST / COVERAGE ==========
+coverage/
+*.tmp
+
+# ========== EDITORES / SO ==========
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# ========== VARIOS ==========
+dist/
