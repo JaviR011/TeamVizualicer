@@ -32,17 +32,18 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Faltan campos obligatorios" }, { status: 400 });
   }
 
-  const ev = await prisma.scheduleItem.create({
-    data: {
-      title,
-      start: new Date(start),
-      end: new Date(end),
-      audience: audience || "Todos",
-      createdBy,
-    },
-  });
+const schedule = await prisma.scheduleItem.create({
+  data: {
+    title,
+    day: new Date(start).getDate(), // or extract day as needed
+    start,
+    end,
+    // createdBy removed because it's not a valid property
+  },
+});
 
-  return NextResponse.json({ ok: true, id: ev.id });
+
+  return NextResponse.json({ ok: true, id: schedule.id });
 }
 
 // DELETE /api/schedule?id=<id>
