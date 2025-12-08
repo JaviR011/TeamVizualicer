@@ -1,48 +1,65 @@
 import { NextResponse } from "next/server";
-import { dbConnect } from "@/lib/db";
-import { User } from "@/lib/models/User";
+import { prisma } from "@/lib/prisma";
 
-/**
- * Ajusta horas de servicio de un usuario.
- * Body: { email: string, delta: number, reason?: string }
- */
 export async function POST(req: Request) {
   try {
-    await dbConnect();
+    const body = await req.json();
+    const { email, hours, delta, amount, reason } = body;
 
-    const body = await req.json() as { email?: string; delta?: number; reason?: string };
-
-    // Validación de parámetros
-    if (!body?.email || typeof body.delta !== "number" || !Number.isFinite(body.delta)) {
-      return NextResponse.json({ ok: false, error: "Parámetros inválidos" }, { status: 400 });
+    if (!email) {
+      return NextResponse.json(
+        { ok: false, error: "email requerido" },
+        { status: 400 }
+      );
     }
 
-    // Buscar usuario
-    const user = await User.findOne({ email: body.email });
-    if (!user) {
-      return NextResponse.json({ ok: false, error: "Usuario no encontrado" }, { status: 404 });
+    // aceptamos varios nombres posibles por si el front manda uno u otro
+    const changeRaw = hours ?? delta ?? amount;
+    const change = Number(changeRaw);
+
+    if (!Number.isFinite(change) || change === 0) {
+      return NextResponse.json(
+        { ok: false, error: "cantidad inválida" },
+        { status: 400 }
+      );
     }
 
-    // Calcular nuevo total (mínimo 0)
-    const current = Number(user.serviceHours ?? 0);
-    const nextTotal = Math.max(0, current + Number(body.delta));
+    // actualizar horas acumuladas del usuario
+    const user = await prisma.user.update({
+      where: { email },
+      data: {
+        serviceHours: { increment: change },
+      },
+    });
 
-    user.serviceHours = nextTotal;
-    await user.save(); // evita problemas de $inc / tipos
+    // registrar el movimiento en HourRecord
+    await prisma.hourRecord.create({
+      data: {
+        userId: user.id,
+        userName: user.name,
+        minutes: change,       // guardamos el ajuste (+/- horas)
+        date: new Date(),
+        // si en tu schema agregas un campo "reason", aquí lo puedes guardar:
+        // reason: reason ?? null,
+      },
+    });
 
     return NextResponse.json({
       ok: true,
       user: {
+        id: user.id,
         name: user.name,
         email: user.email,
         memberType: user.memberType,
         isAdmin: user.isAdmin,
-        serviceHours: user.serviceHours ?? 0,
+        serviceHours: user.serviceHours,
       },
     });
-  } catch (err: any) {
-    console.error("[admin/hours] ERROR:", err);
-    // Devuelve el mensaje si existe, para depurar desde el front
-    return NextResponse.json({ ok: false, error: err?.message || "INTERNAL" }, { status: 500 });
+  } catch (err) {
+    console.error("[admin/hours][POST]", err);
+    return NextResponse.json(
+      { ok: false, error: "INTERNAL" },
+      { status: 500 }
+    );
   }
 }

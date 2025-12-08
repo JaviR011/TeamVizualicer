@@ -5,26 +5,29 @@ import { Trophy } from "lucide-react";
 
 interface ProgressRankingProps {
   isAdmin: boolean;
+  userEmail: string;
 }
 
-export function ProgressRanking({ isAdmin }: { isAdmin: boolean; }) {
+export function ProgressRanking({ isAdmin, userEmail }: ProgressRankingProps) {
   const [currentHours, setCurrentHours] = useState<number>(0);
 
   useEffect(() => {
-    // Si ya tienes el email en contexto/prop, úsalo aquí.
-    const email = (typeof window !== "undefined") ? localStorage.getItem("userEmail") : "";
+    if (!userEmail) return;
+
     (async () => {
       try {
         const res = await fetch("/api/progress/me", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email }),
+          body: JSON.stringify({ email: userEmail }),
         });
         const json = await res.json();
         if (json.ok) setCurrentHours(json.serviceHours ?? 0);
-      } catch (e) { console.error(e); }
+      } catch (e) {
+        console.error(e);
+      }
     })();
-  }, []);
+  }, [userEmail]);
 
   const levels = [
     { name: "Cuarzo", min: 0, max: 99, color: "#94A3B8" },

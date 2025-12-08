@@ -37,10 +37,12 @@ export function DashboardLayout({
     { id: "progress", label: "Progreso", icon: TrendingUp, show: showServiceHours },
     { id: "team", label: "Equipo", icon: Users, show: true },
     { id: "schedule", label: "Horario", icon: Clock, show: true },
-    { id: "calendar", label: "Calendario", icon: Calendar, show: true },
-    { id: "member-of-month", label: "Miembro del Mes", icon: Trophy, show: true },
-    { id: "gallery", label: "Galería", icon: Image, show: true },
-    { id: "achievements", label: "Logros", icon: Award, show: showServiceHours },
+
+    { id: "calendar", label: "Calendario", icon: Calendar, show: false }, // oculto por ahora
+    { id: "member-of-month", label: "Miembro del Mes", icon: Trophy, show: false }, // oculto por ahora
+    { id: "gallery", label: "Galería", icon: Image, show: false }, // oculto por ahora
+    { id: "achievements", label: "Logros", icon: Award, show: false }, // oculto por ahora  
+    
     { id: "announcements", label: "Anuncios", icon: Bell, show: true },
   ];
 

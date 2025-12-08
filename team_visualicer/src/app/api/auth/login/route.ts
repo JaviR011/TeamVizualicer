@@ -1,33 +1,32 @@
+
 import { NextResponse } from "next/server";
-import { dbConnect } from "@/lib/db";
-import { User } from "@/lib/models/User";
 import bcrypt from "bcryptjs";
+import { prisma } from "@/lib/prisma";
 
 export async function POST(req: Request) {
   try {
-    await dbConnect();
     const { email, password } = await req.json();
 
     if (!email || !password) {
       return NextResponse.json({ error: "Faltan datos" }, { status: 400 });
     }
 
-    const user = await User.findOne({ email });
+    const emailNorm = String(email).trim().toLowerCase();
+    const user = await prisma.user.findUnique({ where: { email: emailNorm } });
+
     if (!user) {
-      // usuario no existe
-      return NextResponse.json({ error: "Credenciales" }, { status: 401 });
+      return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 });
     }
 
-    const ok = await bcrypt.compare(password, user.passwordHash);
-    if (!ok) {
-      // contraseña incorrecta
-      return NextResponse.json({ error: "Credenciales" }, { status: 401 });
+    const passwordOk = await bcrypt.compare(password, user.passwordHash);
+    if (!passwordOk) {
+      return NextResponse.json({ error: "Contraseña incorrecta" }, { status: 401 });
     }
 
-    // solo lo necesario para el front
     return NextResponse.json({
       ok: true,
       user: {
+        id: user.id,
         name: user.name,
         email: user.email,
         memberType: user.memberType,
@@ -36,7 +35,7 @@ export async function POST(req: Request) {
       },
     });
   } catch (err) {
-    console.error(err);
+    console.error("[auth/login] INTERNAL", err);
     return NextResponse.json({ error: "Error interno" }, { status: 500 });
   }
 }

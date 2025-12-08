@@ -1,23 +1,35 @@
+
 import { NextResponse } from "next/server";
-import { dbConnect } from "@/lib/db";
-import GalleryItem from "@/lib/models/GalleryItem";
+import { prisma } from "@/lib/prisma";
 
 export async function GET() {
-  await dbConnect();
-  const items = await GalleryItem.find().sort({ createdAt: -1 }).lean();
-  const data = items.map((g: any) => ({
-    id: g._id.toString(),
+  const items = await prisma.galleryItem.findMany({
+    orderBy: { createdAt: "desc" },
+  });
+
+  const data = items.map((g) => ({
+    id: g.id,
     caption: g.caption,
-    date: new Date(g.date ?? g.createdAt).toLocaleDateString("es-MX", { day: "2-digit", month: "short", year: "numeric" }),
+    date: (g.date ?? g.createdAt).toLocaleDateString("es-MX", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    }),
     url: g.url,
   }));
+
   return NextResponse.json({ ok: true, data });
 }
 
 export async function POST(req: Request) {
-  await dbConnect();
   const { url, caption, createdBy } = await req.json();
-  if (!url) return NextResponse.json({ error: "Falta url" }, { status: 400 });
-  const g = await GalleryItem.create({ url, caption, createdBy });
-  return NextResponse.json({ ok: true, id: g._id.toString() });
+  if (!url) {
+    return NextResponse.json({ error: "Falta url" }, { status: 400 });
+  }
+
+  const g = await prisma.galleryItem.create({
+    data: { url, caption, createdBy },
+  });
+
+  return NextResponse.json({ ok: true, id: g.id });
 }

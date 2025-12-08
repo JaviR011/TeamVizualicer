@@ -1,24 +1,95 @@
+"use client";
+
 import { useEffect, useState } from "react";
-import { Card, CardContent } from "./ui/card";
-import { Bell, Calendar, User } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
+import { Bell, CalendarDays, User as UserIcon } from "lucide-react";
 
-type Ann = { id:string; title:string; message:string; author:string; date:string; priority:"low"|"medium"|"high" };
+type Priority = "low" | "medium" | "high";
 
-export function Announcements() {
-  const [announcements, setAnnouncements] = useState<Ann[]>([]);
+interface Announcement {
+  id: string;
+  title: string;
+  message: string;
+  author: string;
+  priority: Priority;
+  date: string; // ISO
+}
+
+interface AnnouncementsProps {
+  isAdmin: boolean;
+}
+
+export function Announcements({ isAdmin }: AnnouncementsProps) {
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch("/api/announcements");
+        const res = await fetch("/api/announcements", { cache: "no-store" });
         const json = await res.json();
-        if (json.ok) setAnnouncements(json.data);
-      } catch (e) { console.error(e); }
-      finally { setLoading(false); }
+        if (res.ok && json.ok) {
+          setAnnouncements(json.data ?? []);
+        } else {
+          console.error("Error al cargar anuncios:", json.error);
+        }
+      } catch (e) {
+        console.error("Error de red al cargar anuncios:", e);
+      } finally {
+        setLoading(false);
+      }
     })();
   }, []);
 
+  const handleDelete = async (id: string) => {
+    const confirmDelete = window.confirm(
+      "¿Seguro que quieres eliminar este anuncio?"
+    );
+    if (!confirmDelete) return;
+
+    try {
+      const res = await fetch("/api/announcements", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+
+      const json = await res.json();
+      if (!res.ok || !json.ok) {
+        alert("No se pudo eliminar el anuncio.");
+        console.error("Error al eliminar anuncio:", json.error);
+        return;
+      }
+
+      // Quitar de la lista local
+      setAnnouncements((prev) => prev.filter((a) => a.id !== id));
+    } catch (e) {
+      console.error("Error de red al eliminar anuncio:", e);
+      alert("Ocurrió un error al eliminar el anuncio.");
+    }
+  };
+
+  const formatDate = (iso: string) => {
+    const d = new Date(iso);
+    return d.toLocaleString("es-MX", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+
+  const getPriorityLabel = (p: Priority) => {
+    switch (p) {
+      case "low":
+        return "LOW";
+      case "high":
+        return "HIGH";
+      default:
+        return "MEDIUM";
+    }
+  };
   const getPriorityColor = (priority: string) => {
     switch (priority) {
       case "high": return "#C41C1C";
@@ -26,50 +97,114 @@ export function Announcements() {
       default: return "#10B981";
     }
   };
+  
+  const getPriorityClasses = (p: Priority) => {
+    switch (p) {
+      case "low":
+        return "bg-[#E5F9E7] text-[#15803D]";
+      case "high":
+        return "bg-[#FEE2E2] text-[#B91C1C]";
+      default:
+        return "bg-[#FFEFD5] text-[#D97706]";
+    }
+  };
 
-  if (loading) return <div className="text-center">Cargando…</div>;
-
-  // ...render igual que el tuyo, pero usando 'announcements' del estado
-  // (pego tu mismo JSX y reemplazo el map)
   return (
     <div className="space-y-6">
-      <div className="text-center px-4">
-        <h2 className="text-[#C41C1C]" style={{ fontSize: 'clamp(1.5rem, 4vw, 2rem)', fontWeight: 700, letterSpacing: '-0.01em' }}>
-          Anuncios del Laboratorio
-        </h2>
-        <p className="text-[#5A5A5A] mt-2" style={{ fontSize: 'clamp(0.875rem, 2vw, 1rem)' }}>
-          Mantente actualizado con las últimas noticias y actualizaciones
-        </p>
-      </div>
+      <Card
+        className="border-none shadow-none bg-transparent"
+        style={{ boxShadow: "none" }}
+      >
+        <CardHeader className="text-center">
+          <CardTitle
+            className="text-[#C41C1C]"
+            style={{ fontSize: "1.8rem", fontWeight: 700 }}
+          >
+            Anuncios del Laboratorio
+          </CardTitle>
+          <p className="text-[#5A5A5A]" style={{ fontSize: "0.95rem" }}>
+            Mantente actualizado con las últimas noticias y actualizaciones
+          </p>
+        </CardHeader>
+      </Card>
 
-      <div className="space-y-3 sm:space-y-4">
-        {announcements.map((announcement) => (
-          <Card key={announcement.id} className="border-none shadow-lg hover:shadow-xl transition-all duration-300" style={{ borderRadius: '16px' }}>
-            <div className="absolute top-0 left-0 w-1 h-full rounded-l-2xl" style={{ backgroundColor: getPriorityColor(announcement.priority) }} />
-            <CardContent className="pt-6 pl-6 sm:pl-8">
-              <div className="flex items-start gap-3 sm:gap-4">
-                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: getPriorityColor(announcement.priority) }}>
-                  <Bell className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex flex-col sm:flex-row items-start sm:justify-between gap-2 sm:gap-4 mb-3">
-                    <h3 className="text-[#1E1E1E] break-words" style={{ fontSize: 'clamp(1rem, 3vw, 1.25rem)', fontWeight: 700 }}>{announcement.title}</h3>
-                    <span className="px-3 py-1 rounded-full text-white flex-shrink-0 self-start" style={{ backgroundColor: getPriorityColor(announcement.priority), fontSize: '0.7rem', fontWeight: 600 }}>
-                      {announcement.priority.toUpperCase()}
+      {loading ? (
+        <p className="text-[#5A5A5A]" style={{ fontSize: "0.9rem" }}>
+          Cargando anuncios...
+        </p>
+      ) : announcements.length === 0 ? (
+        <p className="text-[#5A5A5A]" style={{ fontSize: "0.9rem" }}>
+          No hay anuncios publicados por el momento.
+        </p>
+      ) : (
+        <div className="space-y-4">
+          {announcements.map((a) => (
+            <Card
+              key={a.id}
+              className="border-none shadow-lg mb-2"
+              style={{ borderRadius: "16px" }}
+            >
+              <CardContent className="p-6 flex flex-col gap-3">
+                <div className="flex justify-between items-start gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-[#FFF5F5] flex items-center justify-center">
+                      <Bell className="w-5 h-5 text-[#C41C1C]" />
+                    </div>
+                    <h3
+                      className="text-[#1E1E1E]"
+                      style={{ fontSize: "1.1rem", fontWeight: 700 }}
+                    >
+                      {a.title}
+                    </h3>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <span
+                      className={`px-3 py-1 rounded-full text-xs font-semibold uppercase ${getPriorityClasses(
+                        a.priority
+                      )}`}
+                      style={{ background: getPriorityColor(a.priority) ,color: "white"}}
+                    >
+                      {getPriorityLabel(a.priority)}
+                      
                     </span>
-                  </div>
-                  <p className="text-[#5A5A5A] mb-4 break-words" style={{ fontSize: 'clamp(0.875rem, 2vw, 1rem)', lineHeight: '1.6' }}>{announcement.message}</p>
-                  <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-6 text-[#5A5A5A]">
-                    <div className="flex items-center gap-2"><User className="w-4 h-4 flex-shrink-0" /><span className="truncate" style={{ fontSize: '0.875rem' }}>{announcement.author}</span></div>
-                    <div className="flex items-center gap-2"><Calendar className="w-4 h-4 flex-shrink-0" /><span style={{ fontSize: '0.875rem' }}>{announcement.date}</span></div>
+
+                    {isAdmin && (
+                      <button
+                        onClick={() => handleDelete(a.id)}
+                        className="text-xs px-3 py-1 rounded-full border border-[#C41C1C] text-[#C41C1C] hover:bg-[#C41C1C] hover:text-white transition-colors"
+                      >
+                        Eliminar
+                      </button>
+                    )}
                   </div>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-        {announcements.length === 0 && <div className="text-center text-[#5A5A5A]">Aún no hay anuncios.</div>}
-      </div>
+
+                <p
+                  className="text-[#5A5A5A]"
+                  style={{ fontSize: "0.9rem" }}
+                >
+                  {a.message}
+                </p>
+
+                <div
+                  className="flex flex-wrap items-center gap-4 text-[#5A5A5A]"
+                  style={{ fontSize: "0.8rem" }}
+                >
+                  <span className="flex items-center gap-1">
+                    <UserIcon className="w-4 h-4" />
+                    {a.author || "Administrador"}
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <CalendarDays className="w-4 h-4" />
+                    {formatDate(a.date)}
+                  </span>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

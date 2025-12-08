@@ -9,6 +9,7 @@ import CalendarView from "./components/CalendarView";
 import Schedule from "./components/Schedule";
 import { Announcements } from "./components/Announcements";
 
+
 export type MemberType =
   | "investigador"
   | "posgrado"
@@ -31,12 +32,17 @@ export default function App() {
   const [userName, setUserName] = useState("");
   const [currentPage, setCurrentPage] = useState<PageType>("profile");
 
-  const handleLogin = (admin: boolean, member: MemberType, email: string) => {
-    setIsAdmin(admin);
-    setMemberType(member);
-    setUserEmail(email);
-    setCurrentPage("profile");
-  };
+const handleLogin = (admin: boolean, member: MemberType, email: string) => {
+  setIsAdmin(admin);
+  setMemberType(member);
+  setUserEmail(email);
+  setCurrentPage("profile");
+
+  // 👇 para que ProgressRanking pueda leer el correo
+  if (typeof window !== "undefined") {
+    localStorage.setItem("userEmail", email);
+  }
+};
 
   // Al conocer el email, traemos nombre/flags reales desde la DB
   useEffect(() => {
@@ -66,13 +72,17 @@ export default function App() {
     }
   }, [currentPage, memberType]);
 
-  const handleLogout = () => {
-    setIsAdmin(false);
-    setMemberType(null);
-    setUserEmail("");
-    setUserName("");
-    setCurrentPage("profile");
-  };
+const handleLogout = () => {
+  setIsAdmin(false);
+  setMemberType(null);
+  setUserEmail("");
+  setUserName("");
+  setCurrentPage("profile");
+
+  if (typeof window !== "undefined") {
+    localStorage.removeItem("userEmail");
+  }
+};
 
   const handleNavigate = (page: string) => {
     setCurrentPage(page as PageType);
@@ -110,19 +120,28 @@ export default function App() {
     switch (currentPage) {
       case "profile":
         // Si es admin, su "perfil" es el dashboard de administración
-        return isAdmin ? (
-          <AdminDashboard />
-        ) : (
-          <UserProfile
-            userEmail={userEmail}
-            isAdmin={isAdmin}
-            memberType={memberType}
-          />
-        );
+        return (
+    <>
+      <UserProfile
+        userEmail={userEmail}
+        isAdmin={isAdmin}
+        memberType={memberType}
+      />
+      
+      {isAdmin &&  <AdminDashboard />}
+    </>
+  );
 
       case "progress":
-        // Esta ruta solo se alcanza si memberType === "servicio-social" (por el guard)
-        return <ProgressRanking isAdmin={false} />;
+  // Solo servicio social llega aquí (por el guard),
+  // pero puede ser o no administrador.
+  return (
+    <ProgressRanking
+      isAdmin={isAdmin}
+      userEmail={userEmail}
+    />
+  );
+
 
       case "team":
         return <Team />;
@@ -138,7 +157,8 @@ export default function App() {
         );
 
       case "announcements":
-        return <Announcements />;
+    return <Announcements isAdmin={isAdmin} />;
+
 
       case "calendar":
         return <CalendarView />;

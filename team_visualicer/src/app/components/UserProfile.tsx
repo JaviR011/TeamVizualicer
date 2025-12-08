@@ -19,16 +19,52 @@ interface UserData {
   serviceHours?: number;
 }
 
+interface ActivityEntry {
+  id: string;
+  date: string;   // ISO
+  hours: number;  // horas (+ o -)
+  notes: string;
+}
+
 export function UserProfile({ isAdmin, memberType, userEmail }: UserProfileProps) {
   const [userData, setUserData] = useState<UserData | null>(null);
+  const [activity, setActivity] = useState<ActivityEntry[]>([]);
+  const [activityLoading, setActivityLoading] = useState(false);
 
-  // Cargar datos desde la BD
+  // ---------- Helpers ----------
+  const getMemberTypeLabel = () => {
+    switch (memberType) {
+      case "investigador":
+        return "Investigador Contratado";
+      case "posgrado":
+        return "Estudiante de Posgrado";
+      case "practicante":
+        return "Practicante";
+      case "servicio-social":
+        return "Miembro de Servicio Social";
+      default:
+        return "Miembro del Laboratorio";
+    }
+  };
+
+  const formatActivityDate = (iso: string) => {
+    const d = new Date(iso);
+    return d.toLocaleDateString("es-MX", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
+  };
+
+  // ---------- Cargar datos del usuario ----------
   useEffect(() => {
     if (!userEmail) return;
 
     const fetchUser = async () => {
       try {
-        const res = await fetch(`/api/me?email=${encodeURIComponent(userEmail)}`, { cache: "no-store" });
+        const res = await fetch(`/api/me?email=${encodeURIComponent(userEmail)}`, {
+          cache: "no-store",
+        });
         const json = await res.json();
         if (res.ok && json.ok) {
           const user = json.user;
@@ -53,22 +89,36 @@ export function UserProfile({ isAdmin, memberType, userEmail }: UserProfileProps
     };
 
     fetchUser();
-  }, [userEmail]);
+  }, [userEmail, memberType]);
 
-  const getMemberTypeLabel = () => {
-    switch (memberType) {
-      case "investigador":
-        return "Investigador Contratado";
-      case "posgrado":
-        return "Estudiante de Posgrado";
-      case "practicante":
-        return "Practicante";
-      case "servicio-social":
-        return "Miembro de Servicio Social";
-      default:
-        return "Miembro del Laboratorio";
-    }
-  };
+  // ---------- Cargar actividad reciente (últimos 5 ajustes de horas) ----------
+  useEffect(() => {
+    if (!userEmail) return;
+
+    const fetchActivity = async () => {
+      try {
+        setActivityLoading(true);
+        const res = await fetch(
+          `/api/hours/history?email=${encodeURIComponent(userEmail)}&limit=5`,
+          { cache: "no-store" }
+        );
+        const json = await res.json();
+        if (res.ok && json.ok) {
+          setActivity(json.data ?? []);
+        } else {
+          console.error("Error al obtener actividad reciente:", json.error);
+          setActivity([]);
+        }
+      } catch (err) {
+        console.error("Error de conexión al cargar actividad:", err);
+        setActivity([]);
+      } finally {
+        setActivityLoading(false);
+      }
+    };
+
+    fetchActivity();
+  }, [userEmail]);
 
   // Datos temporales mientras carga
   const mockUser = userData || {
@@ -78,13 +128,6 @@ export function UserProfile({ isAdmin, memberType, userEmail }: UserProfileProps
     joinDate: "Cargando...",
     serviceHours: undefined,
   };
-
-  const schedules = [
-    { week: "Semana del 8 de Ene", hours: 32, notes: "Excelente colocación de electrodos" },
-    { week: "Semana del 15 de Ene", hours: 28, notes: "Buen progreso en análisis de datos" },
-    { week: "Semana del 22 de Ene", hours: 35, notes: "Trabajo excepcional con procesamiento de señales" },
-    { week: "Semana del 29 de Ene", hours: 30, notes: "Módulo de entrenamiento completado exitosamente" },
-  ];
 
   return (
     <div className="space-y-6">
@@ -100,6 +143,7 @@ export function UserProfile({ isAdmin, memberType, userEmail }: UserProfileProps
               >
                 {mockUser.name
                   .split(" ")
+                  .filter(Boolean)
                   .map((n) => n[0])
                   .join("")}
               </AvatarFallback>
@@ -144,7 +188,8 @@ export function UserProfile({ isAdmin, memberType, userEmail }: UserProfileProps
                   </div>
                 </div>
 
-                {mockUser.serviceHours !== undefined && (
+                {/* Mostrar horas solo si es miembro de Servicio Social */}
+                {memberType === "servicio-social" && mockUser.serviceHours !== undefined && (
                   <div className="flex items-center gap-3">
                     <Award className="w-5 h-5 text-[#C41C1C]" />
                     <div>
@@ -163,7 +208,7 @@ export function UserProfile({ isAdmin, memberType, userEmail }: UserProfileProps
         </CardContent>
       </Card>
 
-      {/* Weekly Schedule & Comments */}
+      {/* Actividad reciente: últimos 5 ajustes de horas */}
       <Card className="border-none shadow-lg" style={{ borderRadius: "16px" }}>
         <CardHeader>
           <CardTitle
@@ -174,39 +219,51 @@ export function UserProfile({ isAdmin, memberType, userEmail }: UserProfileProps
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="space-y-4">
-            {schedules.map((schedule, index) => (
-              <div
-                key={index}
-                className="p-4 bg-[#F5EFE6] rounded-xl border-l-4 border-[#C41C1C]"
-              >
-                <div className="flex justify-between items-start mb-2">
-                  <h4
-                    className="text-[#1E1E1E]"
-                    style={{ fontSize: "1rem", fontWeight: 600 }}
-                  >
-                    {schedule.week}
-                  </h4>
-                  {memberType === "servicio-social" && (
-                    <span
-                      className="text-[#C41C1C]"
+          {activityLoading ? (
+            <p className="text-[#5A5A5A]" style={{ fontSize: "0.9rem" }}>
+              Cargando actividad reciente...
+            </p>
+          ) : activity.length === 0 ? (
+            <p className="text-[#5A5A5A]" style={{ fontSize: "0.9rem" }}>
+              Aún no hay actividad reciente registrada.
+            </p>
+          ) : (
+            <div className="space-y-4">
+              {activity.map((item) => (
+                <div
+                  key={item.id}
+                  className="p-4 bg-[#F5EFE6] rounded-xl border-l-4 border-[#C41C1C]"
+                >
+                  <div className="flex justify-between items-start mb-2">
+                    <h4
+                      className="text-[#1E1E1E]"
                       style={{ fontSize: "1rem", fontWeight: 600 }}
                     >
-                      {schedule.hours} horas
-                    </span>
-                  )}
+                      Registro del {formatActivityDate(item.date)}
+                    </h4>
+
+                    {memberType === "servicio-social" && (
+                      <span
+                        className="text-[#C41C1C]"
+                        style={{ fontSize: "1rem", fontWeight: 600 }}
+                      >
+                        {item.hours} horas
+                      </span>
+                    )}
+                  </div>
+                  <p
+                    className="text-[#5A5A5A]"
+                    style={{ fontSize: "0.9rem" }}
+                  >
+                    {item.notes}
+                  </p>
                 </div>
-                <p
-                  className="text-[#5A5A5A]"
-                  style={{ fontSize: "0.9rem" }}
-                >
-                  {schedule.notes}
-                </p>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
   );
 }
+

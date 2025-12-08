@@ -1,13 +1,21 @@
+
 import { NextResponse } from "next/server";
-import { dbConnect } from "@/lib/db";
-import { User } from "@/lib/models/User";
 import bcrypt from "bcryptjs";
+import { prisma } from "@/lib/prisma";
 
 export async function POST(req: Request) {
-  await dbConnect();
   const { email, newPassword } = await req.json();
-  if (!email || !newPassword) return NextResponse.json({ error: "Faltan campos" }, { status: 400 });
+  if (!email || !newPassword) {
+    return NextResponse.json({ error: "Faltan campos" }, { status: 400 });
+  }
+
+  const emailNorm = String(email).trim().toLowerCase();
   const passwordHash = await bcrypt.hash(newPassword, 10);
-  await User.updateOne({ email }, { $set: { passwordHash } });
+
+  await prisma.user.update({
+    where: { email: emailNorm },
+    data: { passwordHash },
+  });
+
   return NextResponse.json({ ok: true });
 }

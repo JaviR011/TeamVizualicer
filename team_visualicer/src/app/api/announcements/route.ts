@@ -1,34 +1,27 @@
+
 import { NextResponse } from "next/server";
-import {dbConnect } from "@/lib/db";
-import Announcement from "@/lib/models/Announcement";
-
-import { Types } from "mongoose";
-
-interface AnnouncementDocument {
-  _id: Types.ObjectId;
-  title: string;
-  message: string;
-  author: string;
-  priority: string;
-  createdAt: Date;
-}
-
+import { prisma } from "@/lib/prisma";
 
 export async function GET() {
   try {
-    await dbConnect();
-    const rows = await Announcement.find<AnnouncementDocument>({}, { title: 1, message: 1, author: 1, priority: 1, createdAt: 1 })
-      .sort({ createdAt: -1 })
-      .lean();
+    const anns = await prisma.announcement.findMany({
+      orderBy: { createdAt: "desc" },
+    });
 
-    const data = rows.map(a => ({
-      id: a._id.toString(),
-      title: a.title,
-      message: a.message,
-      author: a.author || "Administrador",
-      priority: a.priority || "low",
-      date: new Date(a.createdAt).toLocaleDateString("es-MX", { day: "2-digit", month: "short", year: "numeric" }),
-    }));
+  const data = anns.map((a) => {
+  const rawDate = (a as any).date ?? (a as any).createdAt ?? new Date();
+  const date =
+  rawDate instanceof Date ? rawDate.toISOString() : new Date(rawDate).toISOString();
+
+  return {
+    id: a.id,
+    title: a.title,
+    message: a.message,
+    author: a.author || "Administrador",
+    priority: (a.priority as "low" | "medium" | "high") ?? "low",
+    date,
+  };
+  });
 
     return NextResponse.json({ ok: true, data });
   } catch (err) {
@@ -37,29 +30,58 @@ export async function GET() {
   }
 }
 
-/**
- * POST: crear anuncio
- * Body: { title: string; message: string; author?: string; priority?: "low" | "medium" | "high" }
- */
 export async function POST(req: Request) {
   try {
-    await dbConnect();
-    const body = await req.json() as { title?: string; message?: string; author?: string; priority?: string };
+    const body = await req.json(); // { title, message, author?, priority? }
 
     if (!body?.title || !body?.message) {
-      return NextResponse.json({ ok: false, error: "Faltan title o message" }, { status: 400 });
+      return NextResponse.json(
+        { ok: false, error: "TITLE_AND_MESSAGE_REQUIRED" },
+        { status: 400 },
+      );
     }
 
-    const doc = await Announcement.create({
-      title: body.title,
-      message: body.message,
-      author: body.author || "Administrador",
-      priority: ["low", "medium", "high"].includes(String(body.priority)) ? body.priority : "low",
+    const priorityRaw = String(body.priority || "low");
+    const priority =
+      ["low", "medium", "high"].includes(priorityRaw) ? priorityRaw : "low";
+
+    const created = await prisma.announcement.create({
+      data: {
+        title: body.title,
+        message: body.message,
+        author: body.author || "Administrador",
+        priority,
+      },
     });
 
-    return NextResponse.json({ ok: true, id: doc._id.toString() });
+    return NextResponse.json({ ok: true, id: created.id });
   } catch (err) {
     console.error("[announcements][POST]", err);
     return NextResponse.json({ ok: false, error: "INTERNAL" }, { status: 500 });
+  }
+}
+
+export async function DELETE(req: Request) {
+  try {
+    const { id } = await req.json();
+
+    if (!id) {
+      return NextResponse.json(
+        { ok: false, error: "id requerido" },
+        { status: 400 }
+      );
+    }
+
+    await prisma.announcement.delete({
+      where: { id },
+    });
+
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    console.error("[announcements][DELETE]", err);
+    return NextResponse.json(
+      { ok: false, error: "INTERNAL" },
+      { status: 500 }
+    );
   }
 }

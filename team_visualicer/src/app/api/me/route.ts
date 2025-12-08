@@ -1,11 +1,9 @@
+
 import { NextResponse } from "next/server";
-import { dbConnect } from "@/lib/db";
-import { User } from "@/lib/models/User";
+import { prisma } from "@/lib/prisma";
 
 export async function GET(req: Request) {
   try {
-    await dbConnect();
-
     const url = new URL(req.url);
     const email = url.searchParams.get("email")?.trim().toLowerCase();
 
@@ -13,13 +11,14 @@ export async function GET(req: Request) {
       return NextResponse.json({ ok: false, error: "Email requerido" }, { status: 400 });
     }
 
-    const user = await User.findOne({ email }).lean();
+    const user = await prisma.user.findUnique({ where: { email } });
+
     if (!user) {
       return NextResponse.json({ ok: false, error: "Usuario no encontrado" }, { status: 404 });
     }
 
     const data = {
-      id: String(user._id),
+      id: user.id,
       name: user.name,
       email: user.email,
       memberType: user.memberType,
@@ -30,6 +29,7 @@ export async function GET(req: Request) {
 
     return NextResponse.json({ ok: true, user: data });
   } catch (e: any) {
+    console.error("[me] ERROR", e);
     return NextResponse.json({ ok: false, error: e.message || "INTERNAL" }, { status: 500 });
   }
 }

@@ -1,12 +1,9 @@
+
 import { NextResponse } from "next/server";
-import { dbConnect } from "@/lib/db";
-import { User } from "@/lib/models/User";
-import  Hour  from "@/lib/models/Hour"; 
+import { prisma } from "@/lib/prisma";
 
 export async function GET(req: Request) {
   try {
-    await dbConnect();
-
     const { searchParams } = new URL(req.url);
     const email = searchParams.get("email")?.trim().toLowerCase();
 
@@ -14,31 +11,23 @@ export async function GET(req: Request) {
       return NextResponse.json({ ok: false, error: "EMAIL_REQUIRED" }, { status: 400 });
     }
 
-    const user = await User.findOne({ email }).lean();
+    const user = await prisma.user.findUnique({ where: { email } });
+
     if (!user) {
-      return NextResponse.json({ ok: false, error: "USER_NOT_FOUND" }, { status: 404 });
+      return NextResponse.json({ ok: false, error: "NOT_FOUND" }, { status: 404 });
     }
 
-    // Horas acumuladas (si ya guardas 'minutes' o similar en Hour)
-    const agg = await Hour.aggregate([
-      { $match: { userId: user._id } },
-      { $group: { _id: "$userId", minutes: { $sum: "$minutes" } } },
-    ]);
-
-    const minutes = agg[0]?.minutes || 0;
-    const serviceHours = Math.round((minutes / 60) * 10) / 10;
-
     const data = {
-      id: user._id.toString(),
+      id: user.id,
       name: user.name || "",
       email: user.email || "",
-      memberType: user.memberType || "servicio-social",
+      memberType: (user.memberType as string) || "servicio-social",
       isAdmin: !!user.isAdmin,
-      serviceHours,
+      serviceHours: user.serviceHours ?? 0,
     };
 
     return NextResponse.json({ ok: true, data });
-  } catch (e) {
+  } catch (e: any) {
     console.error("[auth/me] GET", e);
     return NextResponse.json({ ok: false, error: "INTERNAL" }, { status: 500 });
   }

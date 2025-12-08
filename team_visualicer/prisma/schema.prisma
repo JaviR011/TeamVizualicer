@@ -1,0 +1,85 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  career       String
+  memberType   String              // "investigador" | "posgrado" | "practicante" | "servicio-social"
+  passwordHash String
+  isAdmin      Boolean  @default(false)
+  serviceHours Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  schedules    LabSchedule[]
+  hours        HourRecord[]
+}
+
+model LabSchedule {
+  id        String   @id @default(cuid())
+  userEmail String
+  userName  String
+  day       Int      // 0..5 => Lunes..Sáb/Dom
+  start     String
+  end       String
+  createdBy String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      User     @relation(fields: [userEmail], references: [email])
+}
+
+model HourRecord {
+  id        String   @id @default(cuid())
+  userId    String
+  userName  String
+  minutes   Int
+  date      DateTime
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id])
+}
+
+model Announcement {
+  id        String   @id @default(cuid())
+  title     String
+  message   String
+  author    String
+  priority  String
+  createdAt DateTime @default(now())
+}
+
+model Event {
+  id      String   @id @default(cuid())
+  title   String
+  date    DateTime
+  allDay  Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model GalleryItem {
+  id        String   @id @default(cuid())
+  title     String
+  url       String
+  caption   String
+  createdAt DateTime @default(now())
+}
+
+model ScheduleItem {
+  id        String   @id @default(cuid())
+  title     String
+  day       Int
+  start     String
+  end       String
+  createdAt DateTime @default(now())
+}
