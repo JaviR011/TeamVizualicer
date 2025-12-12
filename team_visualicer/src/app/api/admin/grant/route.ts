@@ -8,7 +8,7 @@ export async function POST(req: Request) {
     const rawEmail = body?.email;
     if (!rawEmail || typeof rawEmail !== "string") {
       return NextResponse.json(
-        { ok: false, error: "Falta el correo del miembro." },
+        { ok: false, error: "Falta el correo del Miembro." },
         { status: 400 }
       );
     }
@@ -16,7 +16,7 @@ export async function POST(req: Request) {
 
 
 
-    
+
     const emailNorm = rawEmail.trim().toLowerCase();
     if (!emailNorm) {
       return NextResponse.json(
