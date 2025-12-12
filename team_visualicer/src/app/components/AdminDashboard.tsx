@@ -224,7 +224,6 @@ const handleAdjustHours = async () => {
             />
           </div>
 
-          <button>pruebaaasss</button>
           <Button
             onClick={handleAdjustHours}
             className="h-12 bg-[#C41C1C] hover:bg-[#A01515] text-white transition-all duration-300"
