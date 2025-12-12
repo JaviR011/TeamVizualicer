@@ -13,6 +13,9 @@ export async function POST(req: Request) {
       );
     }
  
+
+
+
     
     const emailNorm = rawEmail.trim().toLowerCase();
     if (!emailNorm) {
