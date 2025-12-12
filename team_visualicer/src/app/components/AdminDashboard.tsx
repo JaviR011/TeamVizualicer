@@ -2,27 +2,90 @@
 
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
-import { Label } from "./ui/label";
-import { Input } from "./ui/input";
 import { Button } from "./ui/button";
+import { Input } from "./ui/input";
+import { Label } from "./ui/label";
 import { Textarea } from "./ui/textarea";
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "./ui/select";
+import { Users, Clock, TrendingUp, UserPlus } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
 
-type AnnPrio = "low" | "medium" | "high";
+// Helper para POST JSON que NUNCA truene por HTML
+async function postJson<T = any>(url: string, body: any) {
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
 
-export default function AdminDashboard() {
+  let data: T | null = null;
+
+  try {
+    // Si no es JSON válido (por ejemplo HTML de error), esto lanza
+    data = (await res.json()) as T;
+  } catch {
+    const text = await res.text().catch(() => "");
+    console.error(`Respuesta no JSON de ${url}:`, text);
+  }
+
+  return { res, data };
+}
+
+function AdminDashboard() {
+  const [hours, setHours] = useState("");
+  const [userId, setUserId] = useState(""); // correo
+  const [announcementTitle, setAnnouncementTitle] = useState("");
+  const [announcementText, setAnnouncementText] = useState("");
+
+  const [showAddAdmin, setShowAddAdmin] = useState(false);
+  const [newAdminEmail, setNewAdminEmail] = useState("");
+
+  const [busy, setBusy] = useState(false);
+  const [hoursResult, setHoursResult] = useState<string>("");
   // ---- Estado para horas ----
   const [targetEmail, setTargetEmail] = useState("");
   const [delta, setDelta] = useState<number>(0);
   const [reason, setReason] = useState("");
-  const [hoursResult, setHoursResult] = useState<string>("");
 
-  // ---- Estado para anuncio ----
-  const [title, setTitle] = useState("");
-  const [message, setMessage] = useState("");
-  const [priority, setPriority] = useState<AnnPrio>("low");
-  const [postResult, setPostResult] = useState<string>("");
 
+  // -------- Registrar horas de servicio --------
+  const handleRegisterHours = async () => {
+    if (!userId || !hours) {
+      alert("Escribe el correo del usuario y las horas.");
+      return;
+    }
+
+    const value = Number(hours);
+    if (Number.isNaN(value)) {
+      alert("Las horas deben ser un número.");
+      return;
+    }
+
+    setBusy(true);
+    try {
+      const { res, data } = await postJson<{
+        ok?: boolean;
+        error?: string;
+        message?: string;
+      }>("/api/hours/register", {
+        email: userId,
+        hours: value,
+      });
+
+      if (!res.ok || !data?.ok) {
+        alert(data?.error || "Error al registrar horas.");
+        return;
+      }
+
+      alert(data.message || "Horas registradas correctamente.");
+      setHours("");
+      setUserId("");
+    } catch (e) {
+      console.error(e);
+      alert("Error de conexión al registrar horas.");
+    } finally {
+      setBusy(false);
+    }
+  };
 const handleAdjustHours = async () => {
   setHoursResult("");
   if (!targetEmail || !Number.isFinite(delta)) {
@@ -47,37 +110,90 @@ const handleAdjustHours = async () => {
     setHoursResult(e?.message || "INTERNAL.");
   }
 };
-
-
-  const handlePublish = async () => {
-    setPostResult("");
-    if (!title.trim() || !message.trim()) {
-      setPostResult("Escribe título y mensaje.");
+  // -------- Publicar anuncio --------
+  const handlePostAnnouncement = async () => {
+    if (!announcementTitle || !announcementText) {
+      alert("Escribe título y mensaje del anuncio.");
       return;
     }
+
+    setBusy(true);
     try {
-      const res = await fetch("/api/announcements", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: title.trim(), message: message.trim(), priority }),
+      const { res, data } = await postJson<{
+        ok?: boolean;
+        error?: string;
+      }>("/api/announcements", {
+        title: announcementTitle,
+        message: announcementText,
+        priority: "medium",
+        author: "Administrador",
       });
-      const json = await res.json();
-      if (!res.ok || !json?.ok) {
-        setPostResult(json?.error || "Error al publicar el anuncio.");
+
+      if (!res.ok || !data?.ok) {
+        alert(data?.error || "Error al publicar anuncio.");
         return;
       }
-      setPostResult("Anuncio publicado.");
-      setTitle("");
-      setMessage("");
-      setPriority("low");
-    } catch {
-      setPostResult("INTERNAL.");
+
+      alert("Anuncio publicado correctamente.");
+      setAnnouncementTitle("");
+      setAnnouncementText("");
+    } catch (e) {
+      console.error(e);
+      alert("Error de conexión al publicar anuncio.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // -------- Otorgar permisos de administrador --------
+  const handleAddAdmin = async () => {
+    if (!newAdminEmail) {
+      alert("Escribe el correo del nuevo administrador.");
+      return;
+    }
+
+    setBusy(true);
+    try {
+      const { res, data } = await postJson<{
+        ok?: boolean;
+        error?: string;
+        user?: { name?: string | null; email: string; isAdmin: boolean };
+      }>("/api/admin/grant", {
+        email: newAdminEmail,
+      });
+
+      if (!data) {
+        alert(
+          "La respuesta del servidor no fue JSON. Revisa la consola para más detalles."
+        );
+        return;
+      }
+
+      if (!res.ok || !data.ok) {
+        alert(data.error || "Error al otorgar permisos.");
+        return;
+      }
+
+      alert(
+        `Ahora ${
+          data.user?.name || data.user?.email || newAdminEmail
+        } es administrador.`
+      );
+      setNewAdminEmail("");
+      setShowAddAdmin(false);
+    } catch (e) {
+      console.error(e);
+      alert("Error de conexión al otorgar permisos.");
+    } finally {
+      setBusy(false);
     }
   };
 
   return (
-    <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-      {/* BLOQUE: Ajustar horas */}
+    <div className="space-y-6">
+      
+
+       {/* BLOQUE: Ajustar horas */}
       <Card className="border-none shadow-lg" style={{ borderRadius: "16px" }}>
         <CardHeader>
           <CardTitle className="text-[#1E1E1E]" style={{ fontSize: "1.25rem" }}>
@@ -108,16 +224,7 @@ const handleAdjustHours = async () => {
             />
           </div>
 
-          <div>
-            <Label htmlFor="reason">Motivo (opcional)</Label>
-            <Input
-              id="reason"
-              className="mt-2 bg-[#F5EFE6] border-none"
-              placeholder="p.ej. guardia extra del sábado"
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-            />
-          </div>
+         
 
           <Button
             onClick={handleAdjustHours}
@@ -133,13 +240,16 @@ const handleAdjustHours = async () => {
             </p>
           )}
         </CardContent>
-      </Card>
+      </Card> 
 
-      {/* BLOQUE: Publicar anuncio */}
+      {/* Publicar Anuncio */}
       <Card className="border-none shadow-lg" style={{ borderRadius: "16px" }}>
         <CardHeader>
-          <CardTitle className="text-[#1E1E1E]" style={{ fontSize: "1.25rem" }}>
-            Publicar anuncio
+          <CardTitle
+            className="text-[#1E1E1E]"
+            style={{ fontSize: "1.25rem" }}
+          >
+            Publicar Anuncio
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -147,53 +257,114 @@ const handleAdjustHours = async () => {
             <Label htmlFor="title">Título</Label>
             <Input
               id="title"
+              value={announcementTitle}
+              onChange={(e) => setAnnouncementTitle(e.target.value)}
+              placeholder="Actualización Importante"
               className="mt-2 bg-[#F5EFE6] border-none"
-              placeholder="Mantenimiento del laboratorio"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
             />
           </div>
-
           <div>
             <Label htmlFor="message">Mensaje</Label>
             <Textarea
               id="message"
+              value={announcementText}
+              onChange={(e) => setAnnouncementText(e.target.value)}
+              placeholder="Escribe tu anuncio aquí..."
               className="mt-2 bg-[#F5EFE6] border-none min-h-[120px]"
-              placeholder="Detalle del anuncio para todo el equipo…"
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
             />
           </div>
-
-          <div>
-            <Label>Prioridad</Label>
-            <Select value={priority} onValueChange={(v) => setPriority(v as AnnPrio)}>
-              <SelectTrigger className="mt-2 bg-[#F5EFE6] border-none">
-                <SelectValue placeholder="Selecciona prioridad" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="low">Baja</SelectItem>
-                <SelectItem value="medium">Media</SelectItem>
-                <SelectItem value="high">Alta</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
           <Button
-            onClick={handlePublish}
-            className="h-12 bg-[#C41C1C] hover:bg-[#A01515] text-white transition-all duration-300"
+            onClick={handlePostAnnouncement}
+            disabled={busy}
+            className="bg-[#C41C1C] hover:bg-[#A01515] text-white"
             style={{ borderRadius: "12px" }}
           >
-            Publicar
+            Publicar Anuncio
           </Button>
-
-          {postResult && (
-            <p className="text-sm" style={{ color: postResult.startsWith("Anuncio") ? "#166534" : "#7f1d1d" }}>
-              {postResult}
-            </p>
-          )}
         </CardContent>
       </Card>
+
+      {/* Gestionar Administradores */}
+      <Card className="border-none shadow-lg" style={{ borderRadius: "16px" }}>
+        <CardHeader>
+          <CardTitle
+            className="text-[#1E1E1E]"
+            style={{ fontSize: "1.25rem" }}
+          >
+            Gestionar Administradores
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p
+            className="text-[#5A5A5A] mb-4"
+            style={{ fontSize: "0.9rem" }}
+          >
+            Otorga permisos de administrador a miembros existentes del
+            laboratorio.
+          </p>
+          <Button
+            onClick={() => setShowAddAdmin(true)}
+            className="bg-[#1E1E1E] hover:bg-[#2E2E2E] text-white"
+            style={{ borderRadius: "12px" }}
+          >
+            <UserPlus className="w-4 h-4 mr-2" />
+            Añadir Administrador
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* Diálogo para añadir admin */}
+      <Dialog open={showAddAdmin} onOpenChange={setShowAddAdmin}>
+        <DialogContent style={{ borderRadius: "16px" }}>
+          <DialogHeader>
+            <DialogTitle
+              className="text-[#1E1E1E]"
+              style={{ fontSize: "1.5rem", fontWeight: 700 }}
+            >
+              Otorgar Permisos de Administrador
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="adminEmail">Correo del Miembro</Label>
+              <Input
+                id="adminEmail"
+                type="email"
+                value={newAdminEmail}
+                onChange={(e) => setNewAdminEmail(e.target.value)}
+                placeholder="usuario@lab.com"
+                className="mt-2 bg-[#F5EFE6] border-none"
+              />
+            </div>
+            <p
+              className="text-[#5A5A5A]"
+              style={{ fontSize: "0.875rem" }}
+            >
+              El miembro podrá registrar horas de servicio y publicar anuncios,
+              pero mantendrá su tipo de miembro actual.
+            </p>
+            <div className="flex gap-3">
+              <Button
+                onClick={handleAddAdmin}
+                disabled={busy}
+                className="flex-1 bg-[#C41C1C] hover:bg-[#A01515] text-white"
+                style={{ borderRadius: "12px" }}
+              >
+                Otorgar Permisos
+              </Button>
+              <Button
+                onClick={() => setShowAddAdmin(false)}
+                className="flex-1 bg-[#E5DDD4] hover:bg-[#D5CCC4] text-[#1E1E1E]"
+                style={{ borderRadius: "12px" }}
+              >
+                Cancelar
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
+
+export default AdminDashboard;
